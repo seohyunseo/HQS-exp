@@ -34,7 +34,8 @@ object SyncManager {
      */
     suspend fun sync(context: Context): Int {
         val dao = LifelogDatabase.getDatabase(context).lifelogDao()
-        val uuid = UserPreferences.getUserUUID(context)
+        val rawId = UserPreferences.getParticipantId(context)
+        val participantId = UserPreferences.formattedParticipantId(rawId)
         val today = KstTimeUtils.todayKstString()
 
         return try {
@@ -47,7 +48,7 @@ object SyncManager {
             val byDate: Map<String, List<LifelogEntity>> = unsynced.groupBy { it.date }
 
             for ((date, rows) in byDate) {
-                val uploaded = uploadDateCsv(uuid, date, rows, context)
+                val uploaded = uploadDateCsv(participantId, date, rows, context)
                 if (uploaded) {
                     syncedIds.addAll(rows.map { it.id })
                     Log.d(TAG, "Uploaded $date (${rows.size} rows)")
@@ -63,7 +64,7 @@ object SyncManager {
             }
 
             // ── 4. Firestore health check for today ────────────────────────
-            uploadHealthCheck(uuid, today, dao)
+            uploadHealthCheck(participantId, today, dao)
 
             syncedIds.size
 
@@ -83,7 +84,7 @@ object SyncManager {
      * Returns false on any error so the caller can skip marking those IDs.
      */
     private suspend fun uploadDateCsv(
-        uuid: String,
+        participantId: String,
         date: String,
         rows: List<LifelogEntity>,
         context: Context
@@ -99,7 +100,8 @@ object SyncManager {
                     )
                 }
             }
-            val ref = Firebase.storage.reference.child("backups/$uuid/Daily_Log_$date.csv")
+            // backups/{P01}/Daily_Log_{date}.csv
+            val ref = Firebase.storage.reference.child("backups/$participantId/Daily_Log_$date.csv")
             ref.putFile(android.net.Uri.fromFile(csvFile)).await()
             csvFile.delete()
             true
@@ -113,7 +115,7 @@ object SyncManager {
     }
 
     private suspend fun uploadHealthCheck(
-        uuid: String,
+        participantId: String,
         date: String,
         dao: com.uvr.hqs_phone.data.db.LifelogDao
     ) {
@@ -121,18 +123,19 @@ object SyncManager {
         val lastActive = dao.lastActiveTimestamp(date)
         val unsyncedCount = dao.getUnsynced().size
         val metadata = mapOf(
-            "uuid" to uuid,
+            "participantId" to participantId,
             "date" to date,
             "totalRows" to rowCount,
             "unsyncedRows" to unsyncedCount,
             "lastActiveTimestamp" to (lastActive ?: 0L),
             "syncTimestamp" to System.currentTimeMillis()
         )
+        // users/{P01}/health_checks/{date}
         Firebase.firestore
-            .collection("users").document(uuid)
+            .collection("users").document(participantId)
             .collection("health_checks").document(date)
             .set(metadata)
             .await()
-        Log.d(TAG, "Health check uploaded for $date")
+        Log.d(TAG, "Health check uploaded for $participantId / $date")
     }
 }

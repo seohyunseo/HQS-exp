@@ -6,9 +6,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
@@ -18,20 +20,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.uvr.hqs_phone.export.ExportManager
 import com.uvr.hqs_phone.service.DataCollectionService
 import kotlinx.coroutines.launch
 
-private val BgDark = Color(0xFF0D1117)
-private val SurfaceDark = Color(0xFF161B22)
-private val CardDark = Color(0xFF1F2937)
-private val AccentGreen = Color(0xFF34D399)
-private val AccentBlue = Color(0xFF58A6FF)
-private val TextPrimary = Color(0xFFF0F6FC)
+private val BgDark       = Color(0xFF0D1117)
+private val SurfaceDark  = Color(0xFF161B22)
+private val CardDark     = Color(0xFF1F2937)
+private val AccentGreen  = Color(0xFF34D399)
+private val AccentBlue   = Color(0xFF58A6FF)
+private val AccentCyan   = Color(0xFF22D3EE)
+private val TextPrimary  = Color(0xFFF0F6FC)
 private val TextSecondary = Color(0xFF8B949E)
 
 @Composable
@@ -42,15 +47,16 @@ fun SettingsScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    val uuid by vm.userUuid.collectAsState()
+    val rawParticipantId by vm.participantId.collectAsStateWithLifecycle()
+    val formattedId by vm.formattedParticipantId.collectAsStateWithLifecycle()
     val unsyncedCount by vm.unsyncedCount.collectAsStateWithLifecycle()
     val isLoading by vm.isLoading.collectAsStateWithLifecycle()
     var exportStatus by remember { mutableStateOf("") }
 
+    // Dialog state for editing the participant ID
+    var showEditDialog by remember { mutableStateOf(false) }
+
     // ── One-time event collector ──────────────────────────────────────────
-    // LaunchedEffect(Unit) runs once per composition lifetime, surviving
-    // recompositions. Channel ensures each Toast fires exactly once,
-    // regardless of screen rotation.
     LaunchedEffect(Unit) {
         vm.uiEvent.collect { event ->
             when (event) {
@@ -73,6 +79,18 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+
+    // ── Edit Participant ID Dialog ─────────────────────────────────────────
+    if (showEditDialog) {
+        ParticipantIdEditDialog(
+            currentRawId = rawParticipantId,
+            onConfirm = { newId ->
+                vm.updateParticipantId(newId)
+                showEditDialog = false
+            },
+            onDismiss = { showEditDialog = false }
+        )
     }
 
     Scaffold(
@@ -123,7 +141,34 @@ fun SettingsScreen(
                         )
                     }
                     Spacer(Modifier.height(12.dp))
-                    InfoRow("Participant ID", uuid)
+
+                    // Participant ID row with inline Edit button
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text("Participant ID", color = TextSecondary, fontSize = 13.sp)
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                formattedId,
+                                color = AccentCyan,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 22.sp
+                            )
+                        }
+                        IconButton(onClick = { showEditDialog = true }) {
+                            Icon(
+                                Icons.Default.Edit,
+                                contentDescription = "Edit Participant ID",
+                                tint = TextSecondary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(8.dp))
                     InfoRow(
                         "Service Status",
                         if (DataCollectionService.isRunning) "● Running" else "○ Stopped"
@@ -159,13 +204,12 @@ fun SettingsScreen(
                     Spacer(Modifier.height(16.dp))
                     Button(
                         onClick = { vm.triggerManualSync() },
-                        enabled = !isLoading,   // disabled while spinner is active
+                        enabled = !isLoading,
                         colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.fillMaxWidth().height(48.dp)
                     ) {
                         if (isLoading) {
-                            // Spinner shown inside the button during sync
                             CircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
                                 color = Color.White,
@@ -227,6 +271,88 @@ fun SettingsScreen(
                     if (exportStatus.isNotEmpty()) {
                         Spacer(Modifier.height(8.dp))
                         Text(exportStatus, color = AccentGreen, fontSize = 13.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── Edit Participant ID Dialog ─────────────────────────────────────────────────
+
+@Composable
+private fun ParticipantIdEditDialog(
+    currentRawId: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var input by remember { mutableStateOf(currentRawId) }
+    val isValid = input.trim().isNotEmpty() && input.trim().toIntOrNull() != null
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = CardDark),
+            shape = RoundedCornerShape(20.dp)
+        ) {
+            Column(modifier = Modifier.padding(24.dp)) {
+                Text(
+                    "Edit Participant ID",
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+                Spacer(Modifier.height(16.dp))
+                OutlinedTextField(
+                    value = input,
+                    onValueChange = { new ->
+                        if (new.all { it.isDigit() } && new.length <= 4) input = new
+                    },
+                    label = { Text("Participant ID") },
+                    placeholder = { Text("예: 01, 12") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
+                        focusedBorderColor = AccentCyan,
+                        unfocusedBorderColor = TextSecondary,
+                        focusedLabelColor = AccentCyan,
+                        unfocusedLabelColor = TextSecondary,
+                        cursorColor = AccentCyan
+                    ),
+                    shape = RoundedCornerShape(10.dp)
+                )
+                if (isValid) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "→ P%02d".format(input.trim().toInt()),
+                        color = AccentCyan,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                Spacer(Modifier.height(24.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary)
+                    ) {
+                        Text("Cancel")
+                    }
+                    Button(
+                        onClick = { if (isValid) onConfirm(input.trim()) },
+                        enabled = isValid,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentCyan)
+                    ) {
+                        Text("Save", color = Color(0xFF0D1117), fontWeight = FontWeight.Bold)
                     }
                 }
             }

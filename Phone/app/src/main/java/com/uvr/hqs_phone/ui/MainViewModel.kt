@@ -32,8 +32,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val dao = LifelogDatabase.getDatabase(application).lifelogDao()
     private val today get() = KstTimeUtils.todayKstString()
 
-    private val _userUuid = MutableStateFlow("...")
-    val userUuid: StateFlow<String> = _userUuid
+    /** Raw numeric string entered by the researcher (e.g. "01", "3"). */
+    val participantId: StateFlow<String> =
+        UserPreferences.participantIdFlow(application)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+
+    /** Formatted participant ID shown in the UI and used in Firebase paths (e.g. "P01"). */
+    val formattedParticipantId: StateFlow<String> = participantId
+        .map { UserPreferences.formattedParticipantId(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "P00")
 
     val todayLogs: StateFlow<List<LifelogEntity>> = dao.getByDateFlow(today)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -56,6 +63,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             .map { it.filter { s -> s.category == "DIGITAL" } }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** Live list of completed SOCIAL (call) events for today, newest first. */
+    val socialEvents: StateFlow<List<LifelogEntity>> =
+        dao.getSocialByDateFlow(today)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Total call duration in milliseconds for today's SOCIAL events. */
+    val socialTotalDurationMs: StateFlow<Long> = socialEvents
+        .map { list -> list.sumOf { it.duration } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0L)
+
     /** Live count of records not yet uploaded to Firebase. */
     val unsyncedCount: StateFlow<Int> = dao.getUnsyncedCountFlow()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
@@ -69,8 +86,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val uiEvent = _uiEvent.receiveAsFlow()
 
     init {
+        // No async init required — participantId is driven by DataStore Flow
+    }
+
+    /** Persists a new participant ID. Immediately reflected via [participantId] / [formattedParticipantId] flows. */
+    fun updateParticipantId(newId: String) {
         viewModelScope.launch {
-            _userUuid.value = UserPreferences.getUserUUID(application)
+            UserPreferences.setParticipantId(getApplication(), newId.trim())
         }
     }
 

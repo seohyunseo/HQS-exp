@@ -25,6 +25,7 @@ class DataCollectionService : LifecycleService() {
 
     private lateinit var physicalTracker: PhysicalTracker
     private lateinit var digitalTracker: DigitalTracker
+    private lateinit var socialTracker: SocialCallTracker
     private var digitalJob: Job? = null
 
     override fun onCreate() {
@@ -34,9 +35,11 @@ class DataCollectionService : LifecycleService() {
 
         physicalTracker = PhysicalTracker(this)
         digitalTracker = DigitalTracker(this)
+        socialTracker = SocialCallTracker(this)
 
         startForeground(TRACKING_NOTIFICATION_ID, buildNotification())
         physicalTracker.register()
+        socialTracker.register()
         startDigitalTracking()
     }
 
@@ -48,6 +51,7 @@ class DataCollectionService : LifecycleService() {
     override fun onDestroy() {
         isRunning = false
         physicalTracker.unregister()
+        socialTracker.unregister()
         digitalJob?.cancel()
         lifecycleScope.launch(Dispatchers.IO) {
             digitalTracker.flushOpenSessions()
@@ -72,7 +76,7 @@ class DataCollectionService : LifecycleService() {
         )
         return NotificationCompat.Builder(this, TRACKING_CHANNEL_ID)
             .setContentTitle("HQS Lifelog Active")
-            .setContentText("Collecting physical & digital activity data")
+            .setContentText("Tracking physical, digital & social activity")
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentIntent(pendingIntent)
             .setOngoing(true)

@@ -25,6 +25,9 @@ interface LifelogDao {
     @Query("SELECT * FROM lifelog WHERE date = :date ORDER BY startTime DESC")
     fun getByDateFlow(date: String): Flow<List<LifelogEntity>>
 
+    @Query("SELECT * FROM lifelog WHERE date = :date AND category = 'SOCIAL' ORDER BY startTime DESC")
+    fun getSocialByDateFlow(date: String): Flow<List<LifelogEntity>>
+
     @Query("SELECT * FROM lifelog WHERE date = :date ORDER BY startTime DESC")
     suspend fun getByDate(date: String): List<LifelogEntity>
 

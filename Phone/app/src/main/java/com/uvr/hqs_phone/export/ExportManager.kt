@@ -5,12 +5,15 @@ import android.net.Uri
 import android.util.Log
 import com.uvr.hqs_phone.data.UserPreferences
 import com.uvr.hqs_phone.data.db.LifelogDatabase
+import com.uvr.hqs_phone.util.KstTimeUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.time.format.DateTimeFormatter
 
 object ExportManager {
 
     private const val TAG = "ExportManager"
+    private val COMPACT_DATE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd")
 
     /**
      * Dumps the entire database to a CSV at the given SAF URI.
@@ -32,9 +35,14 @@ object ExportManager {
         Log.d(TAG, "Exported ${rows.size} rows to $uri")
     }
 
-    /** Returns a suggested filename: Lifelog_Final_{UUID}.csv */
+    /**
+     * Returns a suggested filename: Lifelog_{P01}_{yyyyMMdd}.csv
+     * Example: Lifelog_P01_20260622.csv
+     */
     suspend fun suggestedFilename(context: Context): String {
-        val uuid = UserPreferences.getUserUUID(context)
-        return "Lifelog_Final_$uuid.csv"
+        val rawId = UserPreferences.getParticipantId(context)
+        val formattedId = UserPreferences.formattedParticipantId(rawId)
+        val dateStr = KstTimeUtils.nowKst().toLocalDate().format(COMPACT_DATE_FMT)
+        return "Lifelog_${formattedId}_${dateStr}.csv"
     }
 }

@@ -72,6 +72,12 @@ object KstTimeUtils {
         return Instant.ofEpochMilli(epochMs).atZone(KST).format(fmt)
     }
 
+    /** Formats epoch ms as "HH:mm" in KST — used for call time-range display. */
+    fun formatEpochToTime(epochMs: Long): String {
+        val fmt = DateTimeFormatter.ofPattern("HH:mm")
+        return Instant.ofEpochMilli(epochMs).atZone(KST).format(fmt)
+    }
+
     fun formatDurationMs(durationMs: Long): String {
         val totalSec = durationMs / 1000
         val h = totalSec / 3600

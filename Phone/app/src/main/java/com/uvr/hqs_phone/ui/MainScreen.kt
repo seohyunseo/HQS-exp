@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
@@ -30,6 +31,7 @@ private val SurfaceDark = Color(0xFF161B22)
 private val CardDark = Color(0xFF1F2937)
 private val AccentPhysical = Color(0xFF22D3EE)   // cyan
 private val AccentDigital = Color(0xFFA78BFA)    // purple
+private val AccentSocial = Color(0xFF34D399)     // emerald
 private val TextPrimary = Color(0xFFF0F6FC)
 private val TextSecondary = Color(0xFF8B949E)
 
@@ -42,9 +44,11 @@ fun MainScreen(
     val digitalEvents by vm.digitalEvents.collectAsStateWithLifecycle()
     val physicalSummary by vm.physicalSummary.collectAsStateWithLifecycle()
     val digitalSummary by vm.digitalSummary.collectAsStateWithLifecycle()
+    val socialEvents by vm.socialEvents.collectAsStateWithLifecycle()
+    val socialTotalDurationMs by vm.socialTotalDurationMs.collectAsStateWithLifecycle()
 
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabTitles = listOf("🏃 Physical", "📱 Digital")
+    val tabTitles = listOf("🏃 Physical", "📱 Digital", "📞 Social")
 
     Scaffold(
         containerColor = BgDark,
@@ -66,7 +70,11 @@ fun MainScreen(
                 containerColor = SurfaceDark,
                 contentColor = TextPrimary,
                 indicator = { tabPositions ->
-                    val accent = if (selectedTab == 0) AccentPhysical else AccentDigital
+                    val accent = when (selectedTab) {
+                        0 -> AccentPhysical
+                        1 -> AccentDigital
+                        else -> AccentSocial
+                    }
                     Box(
                         Modifier
                             .tabIndicatorOffset(tabPositions[selectedTab])
@@ -80,17 +88,21 @@ fun MainScreen(
                         selected = selectedTab == index,
                         onClick = { selectedTab = index },
                         text = { Text(title, fontWeight = FontWeight.SemiBold, fontSize = 14.sp) },
-                        selectedContentColor = if (index == 0) AccentPhysical else AccentDigital,
+                        selectedContentColor = when (index) {
+                            0 -> AccentPhysical
+                            1 -> AccentDigital
+                            else -> AccentSocial
+                        },
                         unselectedContentColor = TextSecondary
                     )
                 }
             }
 
             // ── Content ───────────────────────────────────────────────────
-            if (selectedTab == 0) {
-                PhysicalTab(summary = physicalSummary, events = physicalEvents)
-            } else {
-                DigitalTab(summary = digitalSummary, events = digitalEvents)
+            when (selectedTab) {
+                0 -> PhysicalTab(summary = physicalSummary, events = physicalEvents)
+                1 -> DigitalTab(summary = digitalSummary, events = digitalEvents)
+                else -> SocialTab(totalDurationMs = socialTotalDurationMs, events = socialEvents)
             }
         }
     }
@@ -328,3 +340,117 @@ private fun EmptyState(message: String) {
         Text(message, color = TextSecondary, fontSize = 14.sp)
     }
 }
+
+// ── Social Tab ────────────────────────────────────────────────────────────
+
+@Composable
+private fun SocialTab(totalDurationMs: Long, events: List<LifelogEntity>) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item { SocialSummaryCard(totalDurationMs) }
+        if (events.isEmpty()) {
+            item { EmptyState("No calls logged today") }
+        } else {
+            items(events, key = { it.id }) { event ->
+                SocialEventCard(event)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SocialSummaryCard(totalDurationMs: Long) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = CardDark),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(4.dp)
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text(
+                "Social Interactions Today",
+                color = AccentSocial,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Total Call Duration",
+                color = TextSecondary,
+                fontSize = 12.sp
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                formatCallDurationHhMmSs(totalDurationMs),
+                color = TextPrimary,
+                fontWeight = FontWeight.Bold,
+                fontSize = 28.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun SocialEventCard(event: LifelogEntity) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = SurfaceDark),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(AccentSocial.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Phone,
+                    contentDescription = "Call",
+                    tint = AccentSocial,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    event.name,
+                    color = TextPrimary,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    "${KstTimeUtils.formatEpochToTime(event.startTime)}  →  " +
+                            KstTimeUtils.formatEpochToTime(event.endTime),
+                    color = TextSecondary,
+                    fontSize = 12.sp
+                )
+            }
+            Text(
+                KstTimeUtils.formatDurationMs(event.duration),
+                color = AccentSocial,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp
+            )
+        }
+    }
+}
+
+/** Formats duration as HH:mm:ss (always shows hours for call total). */
+private fun formatCallDurationHhMmSs(durationMs: Long): String {
+    val totalSec = durationMs / 1000
+    val h = totalSec / 3600
+    val m = (totalSec % 3600) / 60
+    val s = totalSec % 60
+    return "%02d:%02d:%02d".format(h, m, s)
+}
+
