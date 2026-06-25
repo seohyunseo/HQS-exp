@@ -24,7 +24,7 @@
 
 # 파이어베이스 연동 가이드
 ### 1. 파이어베이스 콘솔에 추가 안드로이드 앱 등록
-* 파이어베이스 콘솔 접속: 기존에 사용하던 파이어베이스 프로젝트 접속 (https://console.firebase.google.com/u/0/project/hqs-phone/overview)
+* 파이어베이스 콘솔 접속: 기존에 사용하던 파이어베이스 프로젝트 접속 (https://console.firebase.google.com/u/1/project/hqs-exp/overview)
 * 프로젝트 설정 이동: 좌측 메뉴 최상단에 있는 Settings -> General 접속
 * 앱 추가: 설정 화면 하단의 Your apps 섹션 -> 'Add app' 클릭
 * 패키지명 입력: 새로 만든 안드로이드 프로젝트의 정확한 패키지 이름(예: com.mycompany.secondapp)을 입력하고 'Register' 클릭.
